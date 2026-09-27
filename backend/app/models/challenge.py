@@ -39,10 +39,12 @@ class Challenge(Base):
         Enum(ChallengeType), nullable=False, default=ChallengeType.CLOSED
     )
 
-    # Para retos cerrados: content tiene las opciones, correct_answer tiene la respuesta exacta
     content = Column(JSON, nullable=False)
-    correct_answer = Column(JSON, nullable=False)
-    points_reward = Column(Integer, default=10)  # Puntos que gana al resolverlo
+    correct_answer = Column(JSON, nullable=True)  # Para retos cerrados
+    valid_structures = Column(
+        JSON, nullable=True
+    )  # <-- NUEVO: Para retos semi-estructurados (lista de respuestas válidas)
+    points_reward = Column(Integer, default=10)
 
     # Relaciones
     dimension = relationship("Dimension")

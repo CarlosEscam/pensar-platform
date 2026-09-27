@@ -7,10 +7,11 @@ class ChallengeCreate(BaseModel):
     title: str
     description: str
     dimension_id: int
-    difficulty: str  # "basic", "intermediate", "advanced"
+    difficulty: str
     challenge_type: str = "closed"
     content: dict
-    correct_answer: dict
+    correct_answer: Optional[dict] = None  # Ahora es opcional
+    valid_structures: Optional[List[dict]] = None  # <-- NUEVO
     points_reward: int = 10
 
 
@@ -23,7 +24,9 @@ class ChallengeResponse(BaseModel):
     challenge_type: str
     content: dict
     points_reward: int
-    # No enviamos correct_answer al frontend por seguridad
+    valid_structures: Optional[List[dict]] = (
+        None  # <-- NUEVO (solo el docente debería ver esto en un panel de edición, pero lo dejamos por simplicidad)
+    )
 
     class Config:
         from_attributes = True

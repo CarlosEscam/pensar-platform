@@ -100,16 +100,35 @@ def submit_challenge_attempt(
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
     if not challenge:
         raise HTTPException(status_code=404, detail="Reto no encontrado.")
-    if challenge.challenge_type != ChallengeType.CLOSED:
+
+    is_correct = False
+
+    # --- LÓGICA DE CALIFICACIÓN SEGÚN EL TIPO DE RETO (Tabla 2 del Anteproyecto) ---
+    if challenge.challenge_type == ChallengeType.CLOSED:
+        # Calificación por respuesta exacta
+        is_correct = submission.submitted_answer == challenge.correct_answer
+
+    elif challenge.challenge_type == ChallengeType.SEMI_STRUCTURED:
+        # Calificación por coincidencia con CUALQUIERA de las estructuras válidas predefinidas
+        if not challenge.valid_structures:
+            raise HTTPException(
+                status_code=500,
+                detail="El reto semi-estructurado no tiene estructuras válidas definidas.",
+            )
+
+        # Comparamos la respuesta del estudiante con la lista de respuestas aceptadas
+        is_correct = submission.submitted_answer in challenge.valid_structures
+
+    else:
         raise HTTPException(
-            status_code=400, detail="Este endpoint es solo para retos cerrados."
+            status_code=400,
+            detail="Tipo de reto no soportado en este endpoint (ej. bloques).",
         )
 
-    # 1. Calificación automática (comparación exacta de JSON)
-    is_correct = submission.submitted_answer == challenge.correct_answer
+    # Calcular puntos
     points_earned = challenge.points_reward if is_correct else 0
 
-    # 2. Registrar el intento
+    # Registrar el intento
     attempt = ChallengeAttempt(
         student_id=current_user.id,
         challenge_id=challenge_id,
@@ -119,7 +138,7 @@ def submit_challenge_attempt(
     )
     db.add(attempt)
 
-    # 3. Actualizar perfil de gamificación del estudiante
+    # Actualizar perfil de gamificación
     profile = (
         db.query(StudentProfile)
         .filter(StudentProfile.user_id == current_user.id)
@@ -132,19 +151,17 @@ def submit_challenge_attempt(
         db.add(profile)
 
     profile.total_points += points_earned
-
-    # Lógica simple de subida de nivel: cada 50 puntos sube de nivel
     new_level = (profile.total_points // 50) + 1
     if new_level > profile.current_level:
         profile.current_level = new_level
 
     db.commit()
 
-    # 4. Generar retroalimentación inmediata
+    # Retroalimentación
     feedback = (
-        "¡Excelente! Respuesta correcta."
+        "¡Excelente! Tu estructura es correcta."
         if is_correct
-        else "Respuesta incorrecta. ¡Inténtalo de nuevo!"
+        else "Esa no es una forma válida de dividir/agrupar. ¡Revisa el problema e inténtalo de nuevo!"
     )
 
     return AttemptResult(
