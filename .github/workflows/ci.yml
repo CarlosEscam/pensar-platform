@@ -1,0 +1,79 @@
+# Pipeline de Integración Continua de PENSAR (Guía 15 / FPI-15)
+# Pasos: Higiene -> Build -> Lint -> Test (con cobertura).
+# REGLA DE ORO: este archivo NO contiene secretos, tokens ni contraseñas.
+# Las pruebas usan SQLite temporal y fijan sus propias variables de prueba (tests/conftest.py);
+# si en el futuro se necesitan credenciales reales, deben guardarse en
+# Settings > Secrets and variables > Actions y leerse con ${{ secrets.NOMBRE }}.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  higiene:
+    name: Higiene del repositorio (sin secretos ni dependencias versionadas)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar que .env, venv y __pycache__ no estén versionados
+        run: |
+          archivos=$(git ls-files | grep -E '(^|/)\.env$|(^|/)venv/|(^|/)\.venv/|__pycache__|\.pyc$' || true)
+          if [ -n "$archivos" ]; then
+            echo "::error::Hay archivos que no deben estar en Git (secretos o dependencias locales):"
+            echo "$archivos" | head -20
+            echo "Total: $(echo "$archivos" | wc -l) archivos. Use 'git rm -r --cached <ruta>' y confirme el .gitignore."
+            exit 1
+          fi
+          echo "Repositorio limpio."
+
+  backend:
+    name: Backend (build, lint, pruebas)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Build - compilar el código y verificar sintaxis
+        run: python -m compileall -q app
+
+      - name: Lint (bloqueante) - errores de sintaxis y nombres indefinidos
+        run: ruff check app tests --select E9,F63,F7,F82
+
+      - name: Lint (informativo) - reglas por defecto de Ruff
+        # Quitar 'continue-on-error' cuando el código quede libre de advertencias.
+        continue-on-error: true
+        run: ruff check app tests
+
+      - name: Test - suite pytest con cobertura
+        run: pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+
+      - name: Guardar reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-backend
+          path: backend/coverage.xml
+          if-no-files-found: ignore

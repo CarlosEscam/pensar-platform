@@ -1,0 +1,8 @@
+# Configuración de linting para PENSAR (backend FastAPI)
+target-version = "py311"
+line-length = 100
+extend-exclude = ["venv", ".venv", "__pycache__"]
+
+[lint]
+# Reglas por defecto de Ruff (E4, E7, E9, F) + imports ordenados (I) y bugbear (B)
+select = ["E4", "E7", "E9", "F"]
