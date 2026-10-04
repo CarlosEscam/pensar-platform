@@ -237,7 +237,6 @@ def test_creacion_de_reto_con_datos_invalidos_no_produce_500(client, dimensiones
     assert r.status_code in (400, 404, 422)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-08: el diseño documentado (recalculate_level y constantes en config) no existe en el código")
 def test_el_diseno_documentado_en_fpi_11_y_fpi_12_existe_en_el_codigo():
     from app.core import config
 
