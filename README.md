@@ -25,7 +25,8 @@ docker-compose.yml  PostgreSQL 15 + API
 ## Ejecutar con Docker
 
 ```bash
-cp backend/.env.example backend/.env   # y cambiar SECRET_KEY por un valor largo y aleatorio
+cp .env.example .env                    # raíz: cambiar POSTGRES_PASSWORD por una contraseña aleatoria
+cp backend/.env.example backend/.env   # cambiar SECRET_KEY (y la misma contraseña en DATABASE_URL)
 docker compose up --build
 # API:  http://localhost:8000      Documentación interactiva: http://localhost:8000/docs
 ```
@@ -36,7 +37,7 @@ docker compose up --build
 cd backend
 python -m venv venv && source venv/bin/activate      # en Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                                  # ajustar SECRET_KEY y DATABASE_URL
+cp .env.example .env                                  # ajustar SECRET_KEY y DATABASE_URL (misma contraseña que POSTGRES_PASSWORD)
 uvicorn app.main:app --reload
 ```
 
