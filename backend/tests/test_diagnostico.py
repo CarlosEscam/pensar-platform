@@ -1,7 +1,6 @@
 """Diagnóstico inicial TPC (RF-01, RN-01, CP-01)."""
 import time
 
-import pytest
 
 RESPUESTA_OK = {"correct": "A"}
 RESPUESTA_MAL = {"correct": "C"}
@@ -84,7 +83,6 @@ def test_intento_inexistente_devuelve_404(client, estudiante):
 
 
 # ------------------------------------------------------------------ defectos conocidos
-@pytest.mark.xfail(strict=True, reason="BUG-09: enviar la misma pregunta repetida infla el puntaje del diagnóstico")
 def test_respuestas_duplicadas_no_inflan_el_puntaje(client, estudiante, diagnostico_28):
     attempt_id = iniciar(client, estudiante).json()["attempt_id"]
     q = diagnostico_28[0]
@@ -92,19 +90,16 @@ def test_respuestas_duplicadas_no_inflan_el_puntaje(client, estudiante, diagnost
     assert r.status_code >= 400 or r.json()["total_score"] <= 1
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-10: RN-01 responde 400 y la documentación (FPI-09) exige 409 Conflict")
 def test_rn_01_responde_409_conflict(client, estudiante, diagnostico_28):
     attempt_id = iniciar(client, estudiante).json()["attempt_id"]
     enviar(client, estudiante, attempt_id, [(diagnostico_28[0], RESPUESTA_OK)])
     assert iniciar(client, estudiante).status_code == 409
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-11: POST /diagnostic/seed no exige autenticación ni rol")
 def test_el_endpoint_seed_exige_autenticacion(client):
     assert client.post("/diagnostic/seed").status_code in (401, 403)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-12: se aceptan respuestas a preguntas inexistentes y se ignoran en silencio")
 def test_pregunta_inexistente_en_el_envio_es_rechazada(client, estudiante, diagnostico_28):
     attempt_id = iniciar(client, estudiante).json()["attempt_id"]
     r = enviar(client, estudiante, attempt_id, [(99999, RESPUESTA_OK)])

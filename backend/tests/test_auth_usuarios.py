@@ -1,7 +1,6 @@
 """Autenticación, registro de usuarios y control de acceso (RNF-02, DoD #9)."""
 from datetime import timedelta
 
-import pytest
 
 from app.models import UserRole
 from app.utils.security import create_access_token
@@ -79,7 +78,6 @@ def test_token_de_usuario_eliminado_devuelve_401(client, db):
 
 
 # ---------------------------------------------------------------- defectos conocidos
-@pytest.mark.xfail(strict=True, reason="BUG-01: POST /users/ permite a un anónimo crearse como admin")
 def test_un_anonimo_no_puede_registrarse_como_administrador(client):
     r = client.post(
         "/users/",
@@ -93,7 +91,6 @@ def test_un_anonimo_no_puede_registrarse_como_administrador(client):
     assert r.status_code in (401, 403) or r.json().get("role") == "student"
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-02: GET /users/ lista usuarios sin exigir JWT")
 def test_listar_usuarios_exige_autenticacion(client, db):
     crear_usuario(db, "privado@unipamplona.edu.co")
     assert client.get("/users/").status_code == 401
