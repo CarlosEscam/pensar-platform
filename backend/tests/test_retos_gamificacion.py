@@ -188,7 +188,6 @@ def test_listado_no_expone_la_respuesta_correcta(client, db, dimensiones, estudi
 
 
 # ------------------------------------------------------------------ defectos conocidos
-@pytest.mark.xfail(strict=True, reason="BUG-03: RN-04 no implementada, repetir el mismo reto suma puntos infinitos")
 def test_repetir_un_reto_cerrado_no_suma_puntos_RN_04(client, db, dimensiones, estudiante):
     reto = crear_reto_cerrado(db, dimensiones["abstraction"], puntos=10)
     intentar(client, estudiante, reto, CORRECTA)
@@ -197,14 +196,12 @@ def test_repetir_un_reto_cerrado_no_suma_puntos_RN_04(client, db, dimensiones, e
     assert r.json()["total_points"] == 10
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-04: GET /challenges/ solo lista retos cerrados; los semi-estructurados no se descubren")
 def test_el_listado_incluye_retos_semi_estructurados(client, db, dimensiones, estudiante):
     crear_reto_semi(db, dimensiones["decomposition"])
     tipos = {c["challenge_type"] for c in client.get("/challenges/", headers=estudiante).json()}
     assert "semi_structured" in tipos
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-05: el filtro ?dimension= del listado se ignora")
 def test_el_filtro_por_dimension_funciona(client, db, dimensiones, estudiante):
     crear_reto_cerrado(db, dimensiones["abstraction"], titulo="A")
     crear_reto_cerrado(db, dimensiones["patterns"], titulo="P")
@@ -212,7 +209,6 @@ def test_el_filtro_por_dimension_funciona(client, db, dimensiones, estudiante):
     assert [c["dimension"] for c in cuerpo] == ["abstraction"]
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-06: se crea un reto semi-estructurado con < 2 estructuras (RF-02 exige HTTP 400)")
 def test_reto_semi_con_una_sola_estructura_es_rechazado_RF_02(client, dimensiones, docente):
     cuerpo = _cuerpo_reto(
         dimensiones["decomposition"],
@@ -223,7 +219,6 @@ def test_reto_semi_con_una_sola_estructura_es_rechazado_RF_02(client, dimensione
     assert client.post("/challenges/", json=cuerpo, headers=docente).status_code == 400
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-07: la creación de retos no valida tipo, dimensión ni datos y falla con HTTP 500")
 @pytest.mark.parametrize(
     "extra",
     [{"challenge_type": "tipo-inventado"}, {"difficulty": "imposible"}, {"dimension_id": 9999}],

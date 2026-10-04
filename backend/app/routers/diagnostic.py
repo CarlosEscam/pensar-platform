@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
@@ -17,7 +17,8 @@ from ..schemas.diagnostic import (
     AttemptResponse,
     DimensionScore,
 )
-from ..utils.jwt import get_current_user
+from ..core.config import TOTAL_DIAGNOSTIC_QUESTIONS
+from ..utils.jwt import get_current_user, require_roles
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/diagnostic", tags=["Diagnostic"])
@@ -25,7 +26,10 @@ router = APIRouter(prefix="/diagnostic", tags=["Diagnostic"])
 
 # --- ENDPOINT DE PRUEBA: Llenar base de datos con preguntas de ejemplo ---
 @router.post("/seed")
-def seed_diagnostic_questions(db: Session = Depends(get_db)):
+def seed_diagnostic_questions(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(UserRole.ADMIN)),
+):
     """Crea dimensiones y preguntas de prueba (solo para desarrollo)"""
     # 1. Crear dimensiones si no existen
     for dim_name in DimensionName:
@@ -99,19 +103,19 @@ def start_diagnostic_attempt(
         db.query(DiagnosticAttempt)
         .filter(
             DiagnosticAttempt.student_id == current_user.id,
-            DiagnosticAttempt.completed_at != None,
+            DiagnosticAttempt.completed_at.isnot(None),
         )
         .first()
     )
 
     if existing_completed:
         raise HTTPException(
-            status_code=400, detail="Ya has completado el diagnóstico inicial."
+            status_code=409, detail="Ya has completado el diagnóstico inicial."
         )
 
     new_attempt = DiagnosticAttempt(
-        student_id=current_user.id, max_score=28
-    )  # Ajustar según cantidad real de preguntas
+        student_id=current_user.id, max_score=TOTAL_DIAGNOSTIC_QUESTIONS
+    )
     db.add(new_attempt)
     db.commit()
     db.refresh(new_attempt)
@@ -141,17 +145,23 @@ def submit_diagnostic_attempt(
     if attempt.completed_at:
         raise HTTPException(status_code=400, detail="Este intento ya fue enviado.")
 
+    # Validar el envío ANTES de modificar cualquier estado (BUG-09 y BUG-12)
+    ids = [a.question_id for a in submission.answers]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=400, detail="Hay preguntas repetidas en el envío.")
+    questions = {
+        q.id: q
+        for q in db.query(DiagnosticQuestion).filter(DiagnosticQuestion.id.in_(ids)).all()
+    }
+    unknown = sorted(set(ids) - set(questions))
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Preguntas inexistentes: {unknown}")
+
     total_score = 0.0
     dimension_scores = {}
 
     for ans_data in submission.answers:
-        question = (
-            db.query(DiagnosticQuestion)
-            .filter(DiagnosticQuestion.id == ans_data.question_id)
-            .first()
-        )
-        if not question:
-            continue
+        question = questions[ans_data.question_id]
 
         # Lógica simple de calificación (compara el JSON de respuesta con el correcto)
         is_correct = 1 if ans_data.student_answer == question.correct_answer else 0

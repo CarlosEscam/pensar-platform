@@ -1,21 +1,24 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
-from datetime import datetime
+
+from ..models.challenge import ChallengeType, DifficultyLevel
 
 
 class ChallengeCreate(BaseModel):
     title: str
     description: str
     dimension_id: int
-    difficulty: str
-    challenge_type: str = "closed"
+    difficulty: DifficultyLevel
+    challenge_type: ChallengeType = ChallengeType.CLOSED
     content: dict
-    correct_answer: Optional[dict] = None  # Ahora es opcional
-    valid_structures: Optional[List[dict]] = None  # <-- NUEVO
+    correct_answer: Optional[dict] = None
+    valid_structures: Optional[List[dict]] = None
     points_reward: int = 10
 
 
 class ChallengeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     title: str
     description: str
@@ -24,12 +27,9 @@ class ChallengeResponse(BaseModel):
     challenge_type: str
     content: dict
     points_reward: int
-    valid_structures: Optional[List[dict]] = (
-        None  # <-- NUEVO (solo el docente debería ver esto en un panel de edición, pero lo dejamos por simplicidad)
-    )
-
-    class Config:
-        from_attributes = True
+    # Solo se devuelve al crear el reto (vista del docente); el listado para
+    # estudiantes nunca lo incluye.
+    valid_structures: Optional[List[dict]] = None
 
 
 class ChallengeSubmit(BaseModel):

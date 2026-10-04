@@ -50,6 +50,10 @@ class Challenge(Base):
     dimension = relationship("Dimension")
     attempts = relationship("ChallengeAttempt", back_populates="challenge")
 
+    def matches_structure(self, submitted_answer: dict) -> bool:
+        """RN-02: coincidencia semántica con alguna estructura válida (independiente del orden de claves)."""
+        return submitted_answer in (self.valid_structures or [])
+
 
 class ChallengeAttempt(Base):
     __tablename__ = "challenge_attempts"

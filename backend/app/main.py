@@ -2,7 +2,6 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .database import engine, Base, get_db
-from .models import User
 from .routers import users
 from .routers import auth
 from .routers import diagnostic
@@ -30,7 +29,7 @@ def read_root():
 @app.get("/test-db")
 def test_db_connection(db: Session = Depends(get_db)):
     try:
-        result = db.execute(text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         return {"estado": "exitoso", "mensaje": "Conexión a PostgreSQL correcta."}
     except Exception as e:
         return {"estado": "error", "mensaje": str(e)}

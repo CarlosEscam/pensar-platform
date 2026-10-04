@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import User, UserRole
+from ..models.diagnostic import Dimension, DimensionName
 from ..models.challenge import (
     Challenge,
     ChallengeAttempt,
     StudentProfile,
     ChallengeType,
+    DifficultyLevel,
 )
 from ..schemas.challenge import (
     ChallengeCreate,
@@ -14,9 +16,26 @@ from ..schemas.challenge import (
     ChallengeSubmit,
     AttemptResult,
 )
+from ..services.graders import get_grader
 from ..utils.jwt import get_current_user
 
 router = APIRouter(prefix="/challenges", tags=["Challenges"])
+
+
+def _to_response(c: Challenge, include_structures: bool = False) -> dict:
+    data = {
+        "id": c.id,
+        "title": c.title,
+        "description": c.description,
+        "dimension": c.dimension.name.value,
+        "difficulty": c.difficulty.value,
+        "challenge_type": c.challenge_type.value,
+        "content": c.content,
+        "points_reward": c.points_reward,
+    }
+    if include_structures:
+        data["valid_structures"] = c.valid_structures
+    return data
 
 
 # --- ENDPOINT PARA DOCENTES/ADMIN: Crear un reto ---
@@ -32,56 +51,50 @@ def create_challenge(
             detail="Solo docentes o administradores pueden crear retos.",
         )
 
-    new_challenge = Challenge(**challenge_data.dict())
+    if not db.query(Dimension).filter(Dimension.id == challenge_data.dimension_id).first():
+        raise HTTPException(status_code=404, detail="La dimensión indicada no existe.")
+
+    if challenge_data.challenge_type == ChallengeType.SEMI_STRUCTURED:
+        # RF-02: un reto semi-estructurado exige al menos dos estructuras válidas
+        if not challenge_data.valid_structures or len(challenge_data.valid_structures) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Un reto semi-estructurado requiere al menos 2 estructuras válidas.",
+            )
+    elif challenge_data.challenge_type == ChallengeType.CLOSED:
+        if not challenge_data.correct_answer:
+            raise HTTPException(
+                status_code=400, detail="Un reto cerrado requiere correct_answer."
+            )
+
+    new_challenge = Challenge(**challenge_data.model_dump())
     db.add(new_challenge)
     db.commit()
     db.refresh(new_challenge)
 
-    # Formatear respuesta
-    return {
-        "id": new_challenge.id,
-        "title": new_challenge.title,
-        "description": new_challenge.description,
-        "dimension": new_challenge.dimension.name.value,
-        "difficulty": new_challenge.difficulty.value,
-        "challenge_type": new_challenge.challenge_type.value,
-        "content": new_challenge.content,
-        "points_reward": new_challenge.points_reward,
-    }
+    return _to_response(new_challenge, include_structures=True)
 
 
 # --- ENDPOINT PARA ESTUDIANTES: Ver retos disponibles ---
 @router.get("/", response_model=list[ChallengeResponse])
 def get_available_challenges(
-    dimension: str = None,
-    difficulty: str = None,
+    dimension: DimensionName | None = None,
+    difficulty: DifficultyLevel | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Challenge).filter(Challenge.challenge_type == ChallengeType.CLOSED)
-
+    query = db.query(Challenge).filter(
+        Challenge.challenge_type.in_([ChallengeType.CLOSED, ChallengeType.SEMI_STRUCTURED])
+    )
     if dimension:
-        # Nota: En una implementación real, haríamos un join con Dimension, pero por simplicidad:
-        pass  # Se puede mejorar con un join, por ahora devuelve todos los cerrados
-
-    challenges = query.all()
-
-    # Mapeo manual para evitar errores de serialización de Enums/Relaciones
-    response_data = []
-    for c in challenges:
-        response_data.append(
-            {
-                "id": c.id,
-                "title": c.title,
-                "description": c.description,
-                "dimension": c.dimension.name.value,
-                "difficulty": c.difficulty.value,
-                "challenge_type": c.challenge_type.value,
-                "content": c.content,
-                "points_reward": c.points_reward,
-            }
+        query = query.join(Dimension, Challenge.dimension_id == Dimension.id).filter(
+            Dimension.name == dimension
         )
-    return response_data
+    if difficulty:
+        query = query.filter(Challenge.difficulty == difficulty)
+
+    # Nunca se envían correct_answer ni valid_structures a los estudiantes
+    return [_to_response(c) for c in query.all()]
 
 
 # --- ENDPOINT PARA ESTUDIANTES: Resolver un reto (Gamificación) ---
@@ -101,44 +114,46 @@ def submit_challenge_attempt(
     if not challenge:
         raise HTTPException(status_code=404, detail="Reto no encontrado.")
 
-    is_correct = False
-
-    # --- LÓGICA DE CALIFICACIÓN SEGÚN EL TIPO DE RETO (Tabla 2 del Anteproyecto) ---
-    if challenge.challenge_type == ChallengeType.CLOSED:
-        # Calificación por respuesta exacta
-        is_correct = submission.submitted_answer == challenge.correct_answer
-
-    elif challenge.challenge_type == ChallengeType.SEMI_STRUCTURED:
-        # Calificación por coincidencia con CUALQUIERA de las estructuras válidas predefinidas
-        if not challenge.valid_structures:
-            raise HTTPException(
-                status_code=500,
-                detail="El reto semi-estructurado no tiene estructuras válidas definidas.",
-            )
-
-        # Comparamos la respuesta del estudiante con la lista de respuestas aceptadas
-        is_correct = submission.submitted_answer in challenge.valid_structures
-
-    else:
+    grader = get_grader(challenge.challenge_type)
+    if grader is None:
         raise HTTPException(
             status_code=400,
             detail="Tipo de reto no soportado en este endpoint (ej. bloques).",
         )
+    if (
+        challenge.challenge_type == ChallengeType.SEMI_STRUCTURED
+        and not challenge.valid_structures
+    ):
+        raise HTTPException(
+            status_code=500,
+            detail="El reto semi-estructurado no tiene estructuras válidas definidas.",
+        )
 
-    # Calcular puntos
-    points_earned = challenge.points_reward if is_correct else 0
+    is_correct = grader.grade(submission.submitted_answer, challenge)
 
-    # Registrar el intento
-    attempt = ChallengeAttempt(
-        student_id=current_user.id,
-        challenge_id=challenge_id,
-        submitted_answer=submission.submitted_answer,
-        is_correct=is_correct,
-        points_earned=points_earned,
+    # RN-04: los puntos de un reto solo se otorgan la primera vez que se resuelve
+    already_solved = (
+        db.query(ChallengeAttempt.id)
+        .filter(
+            ChallengeAttempt.student_id == current_user.id,
+            ChallengeAttempt.challenge_id == challenge_id,
+            ChallengeAttempt.is_correct.is_(True),
+        )
+        .first()
+        is not None
     )
-    db.add(attempt)
+    points_earned = challenge.points_reward if (is_correct and not already_solved) else 0
 
-    # Actualizar perfil de gamificación
+    db.add(
+        ChallengeAttempt(
+            student_id=current_user.id,
+            challenge_id=challenge_id,
+            submitted_answer=submission.submitted_answer,
+            is_correct=is_correct,
+            points_earned=points_earned,
+        )
+    )
+
     profile = (
         db.query(StudentProfile)
         .filter(StudentProfile.user_id == current_user.id)
@@ -151,18 +166,16 @@ def submit_challenge_attempt(
         db.add(profile)
 
     profile.total_points += points_earned
-    new_level = (profile.total_points // 50) + 1
-    if new_level > profile.current_level:
-        profile.current_level = new_level
+    profile.recalculate_level()
 
     db.commit()
 
-    # Retroalimentación
-    feedback = (
-        "¡Excelente! Tu estructura es correcta."
-        if is_correct
-        else "Esa no es una forma válida de dividir/agrupar. ¡Revisa el problema e inténtalo de nuevo!"
-    )
+    if is_correct and already_solved:
+        feedback = "Correcto, pero ya habías obtenido los puntos de este reto."
+    elif is_correct:
+        feedback = "¡Excelente! Tu respuesta es correcta."
+    else:
+        feedback = "Esa no es una respuesta válida. ¡Revisa el problema e inténtalo de nuevo!"
 
     return AttemptResult(
         is_correct=is_correct,
