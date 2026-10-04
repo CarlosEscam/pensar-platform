@@ -13,3 +13,17 @@ from .challenge import (
     DifficultyLevel,
     ChallengeType,
 )
+
+__all__ = [
+    "User",
+    "UserRole",
+    "Dimension",
+    "DiagnosticQuestion",
+    "DiagnosticAttempt",
+    "DiagnosticAnswer",
+    "Challenge",
+    "ChallengeAttempt",
+    "StudentProfile",
+    "DifficultyLevel",
+    "ChallengeType",
+]

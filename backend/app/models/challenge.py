@@ -5,12 +5,12 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     DateTime,
-    Float,
     func,
     JSON,
     Boolean,
 )
 from sqlalchemy.orm import relationship
+from ..core.config import POINTS_PER_LEVEL
 from ..database import Base
 import enum
 
@@ -77,3 +77,7 @@ class StudentProfile(Base):
 
     # Relación
     user = relationship("User")
+
+    def recalculate_level(self) -> None:
+        """RN-03: el nivel sube 1 por cada POINTS_PER_LEVEL puntos acumulados."""
+        self.current_level = (self.total_points // POINTS_PER_LEVEL) + 1

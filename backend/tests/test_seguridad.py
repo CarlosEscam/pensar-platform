@@ -44,7 +44,6 @@ def test_token_firmado_con_otra_clave_es_rechazado():
         jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-13: SECRET_KEY tiene un valor por defecto público y la app arranca sin clave real")
 def test_la_aplicacion_no_arranca_sin_secret_key():
     import os
     import subprocess
