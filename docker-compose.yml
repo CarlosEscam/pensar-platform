@@ -14,5 +14,19 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  api:
+    build: ./backend
+    container_name: pensar_api
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - ./backend/.env
+    environment:
+      # Dentro de la red de compose la base de datos se llama "db", no "localhost"
+      DATABASE_URL: postgresql+psycopg://pensar_user:pensar_password@db:5432/pensar_db
+    ports:
+      - "8000:8000"
+
 volumes:
   pgdata:

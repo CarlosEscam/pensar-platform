@@ -12,7 +12,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="PENSAR API",
     description="API para la plataforma de Pensamiento Computacional",
-    version="0.1.0",
+    version="1.0.0",
 )
 
 app.include_router(users.router)
