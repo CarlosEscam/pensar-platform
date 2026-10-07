@@ -42,3 +42,17 @@ class AttemptResult(BaseModel):
     total_points: int
     current_level: int
     feedback: str
+
+
+class CriterionFeedback(BaseModel):
+    criterion: str
+    met: bool
+    comment: str
+
+
+class ImageAttemptResult(AttemptResult):
+    """Resultado de calificar una imagen: nota (% de criterios cumplidos) y detalle."""
+
+    score: int
+    pass_score: int
+    criteria: List[CriterionFeedback]

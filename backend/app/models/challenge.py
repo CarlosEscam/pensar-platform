@@ -25,6 +25,7 @@ class ChallengeType(str, enum.Enum):
     CLOSED = "closed"  # Selección múltiple / ordenar pasos
     SEMI_STRUCTURED = "semi_structured"  # Agrupar/dividir
     BLOCKS = "blocks"  # Programación visual (futuro)
+    IMAGE = "image"  # Imagen subida (DFD, PSeInt, Arduino, Scratch) calificada con visión + rúbrica
 
 
 class Challenge(Base):

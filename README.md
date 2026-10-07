@@ -43,6 +43,16 @@ uvicorn app.main:app --reload
 
 `SECRET_KEY` es obligatoria: la aplicación no arranca sin ella.
 
+## Retos de imagen (DFD, PSeInt, Arduino, Scratch)
+
+El estudiante sube una captura (PNG, JPG o WEBP, máx. 5 MB) a `POST /challenges/{id}/attempt-image`. Un modelo de visión evalúa cada criterio de la **rúbrica** del reto (la define el docente en `content.rubric`) y PENSAR calcula la nota como el porcentaje de criterios cumplidos; aprueba con `content.pass_score` (70 por defecto). La rúbrica no se muestra al estudiante.
+
+- Requiere `ANTHROPIC_API_KEY` en `backend/.env`. Sin ella el endpoint responde 503 y el resto de la API funciona igual.
+- Cada intento calificado tiene costo: el límite es de 5 por estudiante, reto y día.
+- No se guarda la imagen, solo su huella (SHA-256), la nota y el detalle por criterio.
+- Ejemplo de reto (`challenge_type: "image"`): `content = {"language": "dfd", "statement": "...", "rubric": ["Tiene inicio y fin", "Usa una decisión", "Muestra el resultado"]}`. Lenguajes: `dfd`, `pseint`, `arduino`, `scratch`.
+- Bases de datos ya creadas (sin migraciones): ejecutar una vez `ALTER TYPE challengetype ADD VALUE 'image';` en PostgreSQL. En una base nueva no hace falta.
+
 ## Pruebas y calidad
 
 ```bash
